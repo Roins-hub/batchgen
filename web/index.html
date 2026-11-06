@@ -363,22 +363,13 @@
               <div class="field">
                 <span class="lbl">上传到</span>
                 <select id="ihMode" data-ih="mode">
-                  <option value="litterbox">临时图床 litterbox（免费，到期自动删除）</option>
+                  <option value="auto">临时图床，自动切换（免费，推荐）</option>
                   <option value="s3">自己的 S3 兼容存储（R2 / OSS / COS / MinIO）</option>
                   <option value="off">不上传</option>
                 </select>
               </div>
-              <div class="field ih-litterbox">
-                <span class="lbl">保留时长</span>
-                <select data-ih="expiry">
-                  <option value="1h">1 小时</option>
-                  <option value="12h">12 小时</option>
-                  <option value="24h">24 小时</option>
-                  <option value="72h">72 小时</option>
-                </select>
-              </div>
             </div>
-            <p class="hint ih-litterbox">图片会公开保存在 litterbox.catbox.moe，到期自动删除；在此期间拿到链接的人能看到图片。介意的话请改用自己的存储。图床在部分网络下连不上或拒绝上传，这不影响 Seedance 视频：传不上时程序会把图片直接随请求发送。</p>
+            <p class="hint ih-auto">按 uguu.se、litterbox.catbox.moe 的顺序尝试，一家失败自动换下一家。图片会公开保存几小时后自动删除，在此期间拿到链接的人能看到图片，介意的话请改用自己的存储。Seedance 视频默认直接发送图片，不经过图床。</p>
             <div class="spec-grid ih-s3">
               <label class="field wide"><span class="lbl">接口地址（Endpoint）</span><input data-ih="endpoint" class="mono" placeholder="https://<账号ID>.r2.cloudflarestorage.com"></label>
               <label class="field"><span class="lbl">Bucket</span><input data-ih="bucket" class="mono"></label>

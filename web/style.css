@@ -707,7 +707,7 @@ textarea.editor {
 .ref-thumb button .i { width: 12px; height: 12px; }
 
 /* 参考图上传 */
-.ih-box:not([data-mode="litterbox"]) .ih-litterbox,
+.ih-box:not([data-mode="auto"]) .ih-auto,
 .ih-box:not([data-mode="s3"]) .ih-s3,
 .ih-box[data-mode="off"] .ih-test { display: none !important; }
 .row-inline { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }

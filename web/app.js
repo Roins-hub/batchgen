@@ -738,7 +738,6 @@ function fillIH(h = {}) {
     if (el.type === 'checkbox') el.checked = !!v;
     else el.value = v ?? (el.tagName === 'SELECT' ? el.options[0].value : '');
   }
-  if (!h.expiry) $('[data-ih=expiry]').value = '24h';
   $('#ihBox').dataset.mode = $('#ihMode').value;
 }
 

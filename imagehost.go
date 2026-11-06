@@ -6,6 +6,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -20,7 +21,7 @@ import (
 
 // ImageHost 是参考图的「图床」设置：有些接口只收图片网址，本地图片要先上传拿到网址。
 type ImageHost struct {
-	Mode        string `json:"mode"`   // litterbox | s3 | off
+	Mode        string `json:"mode"`   // auto（免费临时图床，自动切换）| s3 | off
 	Expiry      string `json:"expiry"` // litterbox 保留时长：1h | 12h | 24h | 72h
 	Endpoint    string `json:"endpoint"`
 	Region      string `json:"region"`
@@ -36,7 +37,8 @@ func (h *ImageHost) normalize() {
 	switch h.Mode {
 	case "s3", "off":
 	default:
-		h.Mode = "litterbox"
+		// 旧配置的 litterbox 基本都是默认值，不是用户选的，一起改成自动切换
+		h.Mode = "auto"
 	}
 	switch h.Expiry {
 	case "1h", "12h", "24h", "72h":
@@ -62,6 +64,7 @@ func (h *ImageHost) normalize() {
 type Uploader struct {
 	mu    sync.Mutex
 	cache map[string]cachedURL
+	good  int // 上次成功的临时图床，之后的任务先试它，不用再等不通的那家超时
 }
 
 type cachedURL struct {
@@ -95,9 +98,7 @@ func (u *Uploader) Upload(ctx context.Context, h ImageHost, ref *RefImage) (stri
 		link, err = uploadS3(ctx, h, ref, digest)
 		ttl = 7 * 24 * time.Hour
 	} else {
-		link, err = uploadLitterbox(ctx, h.Expiry, ref)
-		d, _ := time.ParseDuration(h.Expiry)
-		ttl = max(d-time.Hour, 30*time.Minute) // 留出余量，快过期的不再复用
+		link, ttl, err = u.uploadTemp(ctx, h, ref)
 	}
 	if err != nil {
 		return "", err
@@ -108,7 +109,94 @@ func (u *Uploader) Upload(ctx context.Context, h ImageHost, ref *RefImage) (stri
 	return link, nil
 }
 
-const litterboxAPI = "https://litterbox.catbox.moe/resources/internals/api.php"
+// 写成变量是为了测试时换成本地假服务。
+var (
+	uguuAPI      = "https://uguu.se/upload"
+	litterboxAPI = "https://litterbox.catbox.moe/resources/internals/api.php"
+)
+
+// tempHostTimeout 是单家的上限：两家都试完不能超过 Upload 的 2 分钟。
+const tempHostTimeout = 55 * time.Second
+
+// tempHost 是一家免费临时图床。ttl 要比实际保留时长短，快过期的链接不再复用。
+// 新增时先确认中转站能下载到真实图片：tmpfiles.org 的链接下载到的是网页，不能用。
+type tempHost struct {
+	upload func(ctx context.Context, h ImageHost, ref *RefImage) (string, error)
+	ttl    func(h ImageHost) time.Duration
+}
+
+var tempHosts = []tempHost{
+	{
+		upload: func(ctx context.Context, _ ImageHost, ref *RefImage) (string, error) { return uploadUguu(ctx, ref) },
+		ttl:    func(ImageHost) time.Duration { return 2 * time.Hour }, // 官方保留 3 小时
+	},
+	{
+		upload: func(ctx context.Context, h ImageHost, ref *RefImage) (string, error) {
+			return uploadLitterbox(ctx, h.Expiry, ref)
+		},
+		ttl: func(h ImageHost) time.Duration {
+			d, _ := time.ParseDuration(h.Expiry)
+			return max(d-time.Hour, 30*time.Minute)
+		},
+	},
+}
+
+// uploadTemp 依次尝试各家临时图床，从上次成功的那家开始。
+func (u *Uploader) uploadTemp(ctx context.Context, h ImageHost, ref *RefImage) (string, time.Duration, error) {
+	u.mu.Lock()
+	first := u.good
+	u.mu.Unlock()
+	var fails []string
+	for i := range tempHosts {
+		index := (first + i) % len(tempHosts)
+		attempt, cancel := context.WithTimeout(ctx, tempHostTimeout)
+		link, err := tempHosts[index].upload(attempt, h, ref)
+		cancel()
+		if err == nil {
+			u.mu.Lock()
+			u.good = index
+			u.mu.Unlock()
+			return link, tempHosts[index].ttl(h), nil
+		}
+		if ctx.Err() != nil {
+			return "", 0, ctx.Err()
+		}
+		fails = append(fails, err.Error())
+	}
+	return "", 0, errors.New(strings.Join(fails, "；"))
+}
+
+func uploadUguu(ctx context.Context, ref *RefImage) (string, error) {
+	buf := &bytes.Buffer{}
+	w := multipart.NewWriter(buf)
+	part, err := w.CreateFormFile("files[]", ref.FileName())
+	if err != nil {
+		return "", err
+	}
+	part.Write(ref.Data)
+	w.Close()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, uguuAPI, buf)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("上传到 uguu 失败: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 16<<10))
+	var out struct {
+		Success bool `json:"success"`
+		Files   []struct {
+			URL string `json:"url"`
+		} `json:"files"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil || resp.StatusCode/100 != 2 || !out.Success || len(out.Files) == 0 || !isHTTP(out.Files[0].URL) {
+		return "", fmt.Errorf("上传到 uguu 失败: HTTP %d %s", resp.StatusCode, clip(string(body), 200))
+	}
+	return out.Files[0].URL, nil
+}
 
 func uploadLitterbox(ctx context.Context, expiry string, ref *RefImage) (string, error) {
 	buf := &bytes.Buffer{}
@@ -128,13 +216,13 @@ func uploadLitterbox(ctx context.Context, expiry string, ref *RefImage) (string,
 	req.Header.Set("Content-Type", w.FormDataContentType())
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("上传到临时图床失败: %w", err)
+		return "", fmt.Errorf("上传到 litterbox 失败: %w", err)
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 	link := strings.TrimSpace(string(body))
 	if resp.StatusCode/100 != 2 || !isHTTP(link) {
-		return "", fmt.Errorf("上传到临时图床失败: HTTP %d %s", resp.StatusCode, clip(link, 200))
+		return "", fmt.Errorf("上传到 litterbox 失败: HTTP %d %s", resp.StatusCode, clip(link, 200))
 	}
 	return link, nil
 }
