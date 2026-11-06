@@ -148,7 +148,8 @@ func (c *Config) normalize() {
 		c.ImageSpec, _ = presetByID("openai_images")
 	}
 	if c.VideoSpec.Submit.Path == "" {
-		id := "newapi_video"
+		// 默认用 /v1/videos：New API 上绑定任务插件的 Seedance 渠道不接受 /v1/video/generations
+		id := "openai_video_seedance"
 		if c.LegacyVideoAPI == "sora" {
 			id = "sora"
 		}

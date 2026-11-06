@@ -86,7 +86,8 @@
 | 图片 | 可灵 图片 | 异步，`/v1/images/generations` |
 | 图片 | 通义万相 文生图 | 异步，DashScope `text2image/image-synthesis` |
 | 图片 | Midjourney（MJ Proxy） | 异步，`/mj/submit/imagine` + `/mj/task/{id}/fetch` |
-| 视频 | NewAPI 统一格式 | `/v1/video/generations`，结果地址自动识别 |
+| 视频 | OpenAI 视频 · Seedance 扩展（默认） | `/v1/videos`，JSON 传参考图和首尾帧，本地图片先传图床 |
+| 视频 | NewAPI 统一格式 | `/v1/video/generations`，结果地址自动识别。New API 上绑定任务插件的 Seedance 渠道不支持，会报无可用渠道 |
 | 视频 | OpenAI 视频 · Seedance 扩展（JSON） | New API 中转的 Seedance 2.x 渠道（模型类型 openai-video）：`/v1/videos` JSON 请求体，`mode` + `references` / `frames` 传参考图和首尾帧，自动带 `client_task_id`、`duration`；参考图自动先传图床 |
 | 视频 | OpenAI Sora | `/v1/videos`，完成后从 `/v1/videos/{id}/content` 下载 |
 | 视频 | 可灵 Kling | `text2video` / `image2video`，官方 Key 填 `AccessKey:SecretKey` 自动生成 JWT |

@@ -142,9 +142,24 @@ func klingJWT(ak, sk string) string {
 type APIError struct {
 	Status int
 	Body   string
+	Path   string // 请求路径，错误提示要靠它判断是不是接口格式的问题
+}
+
+// wrongVideoRoute：New API 按请求路径过滤渠道，绑定了任务插件的渠道通常只支持 /v1/videos，
+// 走 /v1/video/generations 时模型明明开着也会报「无可用渠道」。
+func (e *APIError) wrongVideoRoute(msg string) bool {
+	if !strings.Contains(e.Path, "/video/generations") {
+		return false
+	}
+	low := strings.ToLower(msg)
+	return strings.Contains(low, "no available channel") || strings.Contains(msg, "无可用渠道")
 }
 
 func (e *APIError) Error() string {
+	// 任务卡片只显示开头几行，这条提示要放在原始报错前面才看得到
+	if msg := innermostMessage(e.Body); e.wrongVideoRoute(msg) {
+		return fmt.Sprintf("HTTP %d：这个模型可能不支持当前接口格式，请在「设置 → 视频接口」换成「OpenAI 视频 · Seedance 扩展」后重试。原始报错：%s", e.Status, msg)
+	}
 	hint := ""
 	switch e.Status {
 	case 400, 422:
@@ -253,7 +268,7 @@ func (c *Client) callWait(ctx context.Context, method, p string, body []byte, ct
 		return nil, interrupted(ctx, friendlyCause(ctx, err), got.Load())
 	}
 	if resp.StatusCode/100 != 2 {
-		return nil, &APIError{Status: resp.StatusCode, Body: string(data)}
+		return nil, &APIError{Status: resp.StatusCode, Body: string(data), Path: req.URL.Path}
 	}
 	return data, nil
 }

@@ -382,3 +382,37 @@ func TestWrongVideoFormatTellsWhichToUse(t *testing.T) {
 		t.Fatalf("要告诉用户换哪个格式: %v", err)
 	}
 }
+
+func TestNoChannelOnVideoGenerationsTellsWhichFormat(t *testing.T) {
+	const route = "/v1/video/generations"
+	for _, body := range []string{
+		`{"error":{"message":"No available channel for model seedance-2.0-fast under group default (distributor) (request id: 1)"}}`,
+		`{"error":{"message":"分组 default 下模型 seedance-2.0-fast 无可用渠道（distributor）"}}`,
+	} {
+		got := (&APIError{Status: 503, Body: body, Path: route}).Error()
+		hint, origin := strings.Index(got, "Seedance 扩展"), strings.Index(got, "seedance-2.0-fast")
+		if hint < 0 || origin < 0 || hint > origin {
+			t.Fatalf("卡片只显示开头，提示要在原始报错前面: %q", got)
+		}
+	}
+	// 其它路径上的无可用渠道是真的没渠道，不能让用户去换格式
+	other := &APIError{Status: 503, Body: `{"error":{"message":"No available channel for model x"}}`, Path: "/v1/videos"}
+	if strings.Contains(other.Error(), "Seedance 扩展") {
+		t.Fatalf("/v1/videos 不该提示换格式: %v", other)
+	}
+}
+
+func TestDefaultVideoFormatUsesVideosRoute(t *testing.T) {
+	c := defaultConfig()
+	c.normalize()
+	if c.VideoSpec.Submit.Path != "/v1/videos" || c.VideoSpec.ImageDelivery != "upload" {
+		t.Fatalf("新用户默认要用 /v1/videos，并把本地图传到图床: %+v", c.VideoSpec.Submit.Path)
+	}
+	// 已经保存过的格式不能被默认值改掉
+	saved := defaultConfig()
+	saved.VideoSpec, _ = presetByID("newapi_video")
+	saved.normalize()
+	if saved.VideoSpec.Submit.Path != "/v1/video/generations" {
+		t.Fatalf("不能改用户保存的格式: %s", saved.VideoSpec.Submit.Path)
+	}
+}
