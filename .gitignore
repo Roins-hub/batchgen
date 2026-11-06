@@ -1,0 +1,21 @@
+# 编译产物。dist/ 同时是本机数据目录，config.json 里有 API Key，绝不能提交。
+/dist/
+/release/
+*.exe
+*.syso
+*.update
+
+# go run 时数据写在项目根目录
+/config.json
+/jobs.json
+/outputs/
+/refs/
+/webview-data/
+*.log
+
+# 密钥和本地文件
+*.key
+*.pem
+.env
+.env.*
+.taste-skill/
