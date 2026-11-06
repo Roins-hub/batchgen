@@ -177,12 +177,14 @@ CSV 也可以按行指定：`mode`（或「模式」）列填 references / frame
 1. 改 `winres/winres.json` 里的版本号（4 处，版本号相同或更低时发布工具会拒绝）。
 2. 运行 `bash release.sh "这个版本的更新内容"`。
 
-发布用的是这台电脑上已登录的 GitHub CLI（`gh`），文件放在公开仓库 [Roins-hub/batchgen-releases](https://github.com/Roins-hub/batchgen-releases)。这个仓库只放发布文件，不放源码；用户不用登录就能下载，这是自动更新的前提。
+发布用的是这台电脑上已登录的 GitHub CLI（`gh`），文件放在这个公开仓库的 Releases 里，用户不用登录就能下载，这是自动更新的前提。
+
+1.4.1 及更早的程序只认旧仓库 `Roins-hub/batchgen-releases`，所以发布工具会把同一份文件也发到那里（见 `tools/release/main.go` 的 `bridgeRepo`）。确认没有老用户后，再删掉旧仓库和这段代码；提前删除，老用户就收不到任何更新了。
 
 新用户的固定下载地址：
 
-- 安装包（推荐）：`https://github.com/Roins-hub/batchgen-releases/releases/latest/download/BatchGen-Setup.exe`
-- 免安装压缩包：`https://github.com/Roins-hub/batchgen-releases/releases/latest/download/BatchGen-win-x64.zip`
+- 安装包（推荐）：`https://github.com/Roins-hub/batchgen/releases/latest/download/BatchGen-Setup.exe`
+- 免安装压缩包：`https://github.com/Roins-hub/batchgen/releases/latest/download/BatchGen-win-x64.zip`
 
 安装包不需要管理员权限，默认装到 `%LOCALAPPDATA%\Programs\BatchGen`，也可以选别的盘（Program Files 不行：程序要在安装目录里存数据和更新自己）。没有 WebView2 时会用微软的引导程序联网安装，装不上时程序改用浏览器打开。卸载只删程序和缓存，图片、视频和配置保留。
 

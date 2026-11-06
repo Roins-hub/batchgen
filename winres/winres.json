@@ -5,7 +5,7 @@
   "RT_MANIFEST": {
     "#1": {
       "0409": {
-        "identity": { "name": "BatchGen", "version": "1.4.1.0" },
+        "identity": { "name": "BatchGen", "version": "1.4.2.0" },
         "description": "BatchGen 批量生成器",
         "minimum-os": "win10",
         "execution-level": "as invoker",
@@ -18,14 +18,14 @@
   "RT_VERSION": {
     "#1": {
       "0000": {
-        "fixed": { "file_version": "1.4.1.0", "product_version": "1.4.1.0" },
+        "fixed": { "file_version": "1.4.2.0", "product_version": "1.4.2.0" },
         "info": {
           "0804": {
             "FileDescription": "BatchGen 批量生成器",
-            "FileVersion": "1.4.1",
+            "FileVersion": "1.4.2",
             "OriginalFilename": "BatchGen.exe",
             "ProductName": "BatchGen",
-            "ProductVersion": "1.4.1"
+            "ProductVersion": "1.4.2"
           }
         }
       }

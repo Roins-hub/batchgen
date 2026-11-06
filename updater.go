@@ -25,7 +25,7 @@ import (
 // 下面三个值在编译时由 build.sh 用 -ldflags -X 写入，dev 版本不检查更新。
 var (
 	releaseVersion = "dev"
-	updateURL      = "https://github.com/Roins-hub/batchgen-releases/releases/latest/download/latest.json"
+	updateURL      = "https://github.com/Roins-hub/batchgen/releases/latest/download/latest.json"
 	// updatePublicKey 验证更新包的签名。私钥只在发布者电脑上，存储被人动了手脚也装不上。
 	updatePublicKey = "JwyVjpcOwDgHgONenPyvBBXFzVM1VDezS9J9rlGIRls="
 )

@@ -25,7 +25,10 @@ import (
 
 const (
 	defaultKey = `F:\Keys\batchgen-update.key`
-	repo       = "Roins-hub/batchgen-releases" // 只放发布文件的公开仓库，要和 updater.go 的 updateURL 一致
+	repo       = "Roins-hub/batchgen" // 公开仓库，要和 updater.go 的 updateURL 一致
+	// bridgeRepo 是搬家前的发布仓库：1.4.1 及更早的程序只认这个地址，
+	// 同一份文件也发到这里，它们才能更新到认新地址的版本。确认没有老用户后，删掉这个仓库和这段代码。
+	bridgeRepo = "Roins-hub/batchgen-releases"
 )
 
 func main() {
@@ -181,18 +184,21 @@ func publish(args []string) error {
 	}
 	defer os.RemoveAll(dir)
 	assets := map[string][]byte{"BatchGen.exe": exe, "BatchGen-win-x64.zip": zip, "BatchGen-Setup.exe": setup, "latest.json": signed}
-	cmdArgs := []string{"release", "create", tag, "--repo", repo, "--title", "BatchGen " + version, "--notes", strings.TrimSpace(*notes), "--latest"}
+	var files []string
 	for name, data := range assets {
 		p := filepath.Join(dir, name)
 		if err := os.WriteFile(p, data, 0o644); err != nil {
 			return err
 		}
-		cmdArgs = append(cmdArgs, p)
+		files = append(files, p)
 	}
-	cmd := exec.Command("gh", cmdArgs...)
-	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("发布到 GitHub 失败：%w", err)
+	for _, target := range []string{repo, bridgeRepo} {
+		cmdArgs := []string{"release", "create", tag, "--repo", target, "--title", "BatchGen " + version, "--notes", strings.TrimSpace(*notes), "--latest"}
+		cmd := exec.Command("gh", append(cmdArgs, files...)...)
+		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("发布到 %s 失败：%w", target, err)
+		}
 	}
 	fmt.Printf("已发布 %s。\n给新用户的下载地址：https://github.com/%s/releases/latest/download/BatchGen-Setup.exe\n", version, repo)
 	return nil
