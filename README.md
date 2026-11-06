@@ -179,7 +179,9 @@ CSV 也可以按行指定：`mode`（或「模式」）列填 references / frame
 
 发布用的是这台电脑上已登录的 GitHub CLI（`gh`），文件放在这个公开仓库的 Releases 里，用户不用登录就能下载，这是自动更新的前提。
 
-1.4.1 及更早的程序只认旧仓库 `Roins-hub/batchgen-releases`，所以发布工具会把同一份文件也发到那里（见 `tools/release/main.go` 的 `bridgeRepo`）。确认没有老用户后，再删掉旧仓库和这段代码；提前删除，老用户就收不到任何更新了。
+先把代码推送到 GitHub 再发布：`gh release create` 会把标签打在线上 `main` 的最新提交上。
+
+1.4.1 及更早的程序内置的是已删除的旧仓库地址，无法自动更新，需要重新安装一次。
 
 新用户的固定下载地址：
 
