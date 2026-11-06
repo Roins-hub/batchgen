@@ -6,15 +6,104 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
+	"image/png"
 	"io"
 	"mime/multipart"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
+
+// seedanceRelay 是只认 /v1/videos 的假中转站。reject 不为空时拒绝提交。
+func seedanceRelay(t *testing.T, reject string) (*httptest.Server, func() map[string]any) {
+	t.Helper()
+	var mu sync.Mutex
+	var got map[string]any
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/videos":
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			mu.Lock()
+			got = body
+			mu.Unlock()
+			if reject != "" {
+				w.WriteHeader(http.StatusBadRequest)
+				fmt.Fprintf(w, `{"message":%q}`, reject)
+				return
+			}
+			io.WriteString(w, `{"id":"t1"}`)
+		case r.URL.Path == "/v1/videos/t1":
+			fmt.Fprintf(w, `{"status":"completed","url":%q}`, srv.URL+"/out.mp4")
+		default:
+			io.WriteString(w, "video")
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv, func() map[string]any {
+		mu.Lock()
+		defer mu.Unlock()
+		return got
+	}
+}
+
+func imageHostOffServer(t *testing.T, relay string) (*Server, Job) {
+	t.Helper()
+	s := pipelineServer(t)
+	c := s.cfg.Get()
+	c.BaseURL, c.APIKeys, c.PollIntervalSec = relay, []string{"k"}, 2
+	c.VideoSpec, _ = presetByID("openai_video_seedance")
+	c.VideoSpec.ImageDelivery = "upload" // 旧版本存下的配置
+	c.ImageHost.Mode = "off"
+	if err := s.cfg.Set(c); err != nil {
+		t.Fatal(err)
+	}
+	ref := filepath.Join(t.TempDir(), "ref.png")
+	f, err := os.Create(ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if err := png.Encode(f, image.NewRGBA(image.Rect(0, 0, 2, 2))); err != nil {
+		t.Fatal(err)
+	}
+	return s, Job{ID: "j1", Kind: KindVideo, Model: "m", Prompt: "p", Image: ref, Duration: 5}
+}
+
+func TestImageHostDownSendsReferenceInline(t *testing.T) {
+	srv, body := seedanceRelay(t, "")
+	s, job := imageHostOffServer(t, srv.URL)
+	if err := s.runner.runJob(context.Background(), s.cfg.Get(), job, t.TempDir()); err != nil {
+		t.Fatalf("图床不可用时不该失败: %v", err)
+	}
+	refs, _ := body()["references"].(map[string]any)
+	if img, _ := refs["image"].(string); !strings.HasPrefix(img, "data:image/png;base64,") {
+		t.Fatalf("参考图要随请求发送: %.60v", refs)
+	}
+	if got := s.cfg.Get().VideoSpec.ImageDelivery; got != "inline" {
+		t.Fatalf("成功后要记住，不再等图床超时: %s", got)
+	}
+}
+
+func TestRelayNeedsURLAndImageHostDownReportsImageHost(t *testing.T) {
+	srv, _ := seedanceRelay(t, "image url is invalid")
+	s, job := imageHostOffServer(t, srv.URL)
+	err := s.runner.runJob(context.Background(), s.cfg.Get(), job, t.TempDir())
+	if err == nil || !strings.Contains(err.Error(), "已关闭") {
+		t.Fatalf("两边都不通时要说清图床的问题: %v", err)
+	}
+	if got := s.cfg.Get().VideoSpec.ImageDelivery; got != "upload" {
+		t.Fatalf("失败时不能改设置: %s", got)
+	}
+}
 
 func twoRefs() GenInput {
 	a := &RefImage{URL: "https://x/a.png", Mime: "image/png"}
@@ -405,8 +494,8 @@ func TestNoChannelOnVideoGenerationsTellsWhichFormat(t *testing.T) {
 func TestDefaultVideoFormatUsesVideosRoute(t *testing.T) {
 	c := defaultConfig()
 	c.normalize()
-	if c.VideoSpec.Submit.Path != "/v1/videos" || c.VideoSpec.ImageDelivery != "upload" {
-		t.Fatalf("新用户默认要用 /v1/videos，并把本地图传到图床: %+v", c.VideoSpec.Submit.Path)
+	if c.VideoSpec.Submit.Path != "/v1/videos" || c.VideoSpec.ImageDelivery != "inline" {
+		t.Fatalf("新用户默认要用 /v1/videos，参考图直接随请求发送: %+v", c.VideoSpec.Submit.Path)
 	}
 	// 已经保存过的格式不能被默认值改掉
 	saved := defaultConfig()

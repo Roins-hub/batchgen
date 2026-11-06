@@ -382,9 +382,8 @@ var presets = []Preset{
 	},
 	{
 		ID: "openai_video_seedance", Kind: KindVideo, Name: "OpenAI 视频 · Seedance 扩展（JSON）",
-		Desc: "New API 等中转站的 Seedance 2.x 渠道（模型类型 openai-video）：/v1/videos，JSON 请求体，用 mode + references / frames 传参考图和首尾帧，自动带 client_task_id 和 duration。参考图需要网址，本地图片会自动先传到图床。",
+		Desc: "New API 等中转站的 Seedance 2.x 渠道（模型类型 openai-video）：/v1/videos，JSON 请求体，用 mode + references / frames 传参考图和首尾帧，自动带 client_task_id 和 duration。本地参考图直接随请求发送，渠道只收网址时会自动改为先传图床。",
 		Spec: Spec{
-			ImageDelivery: "upload",
 			Submit: Request{Path: "/v1/videos", Body: `{
   "model": "{{model}}",
   "prompt": "{{prompt}}",

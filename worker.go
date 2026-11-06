@@ -443,15 +443,21 @@ func (r *Runner) runJob(ctx context.Context, cfg Config, job Job, outDir string)
 		if err != nil {
 			return fmt.Errorf("读取尾帧失败: %w", err)
 		}
-		// 接口只收图片网址：本地图片先传到图床（同一张图会复用网址）
+		// 本地图片先传到图床（同一张图会复用网址）。图床连不上或被关闭时改为随请求发送：
+		// 不少接口其实也收 data URL，真的只收网址时提交会失败，到时再报图床的问题。
+		var uploadErr error
 		if spec.ImageDelivery == "upload" {
 			for _, rf := range append(slices.Clone(refs), refLast) {
 				if rf == nil || rf.URL != "" {
 					continue
 				}
 				link, err := r.uploader.Upload(ctx, cfg.ImageHost, rf)
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
 				if err != nil {
-					return fmt.Errorf("上传参考图失败：%w", err)
+					uploadErr = err
+					break // 一个图床不通，其余的也不用再等超时
 				}
 				rf.URL = link
 			}
@@ -487,7 +493,17 @@ func (r *Runner) runJob(ctx context.Context, cfg Config, job Job, outDir string)
 			if ctx.Err() != nil {
 				return err
 			}
+			if uploadErr != nil && needsImageURL(err) {
+				return fmt.Errorf("上传参考图失败：%w", uploadErr)
+			}
 			return &fixableError{err: fmt.Errorf("提交失败，%w", err), hint: fixHintFrom(err)}
+		}
+		if uploadErr != nil {
+			// 记住：之后的任务不用再等图床超时
+			r.setImageDelivery(job.Kind, "inline")
+			r.update(job.ID, func(j *Job) {
+				j.Note = strings.TrimPrefix(j.Note+"；图床不可用，参考图已直接随请求发送", "；")
+			})
 		}
 		if res.TaskID == "" {
 			outs = res.Outputs
