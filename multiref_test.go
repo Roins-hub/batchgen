@@ -505,3 +505,15 @@ func TestDefaultVideoFormatUsesVideosRoute(t *testing.T) {
 		t.Fatalf("不能改用户保存的格式: %s", saved.VideoSpec.Submit.Path)
 	}
 }
+
+func TestDefaultVideoFormatIsFirstInList(t *testing.T) {
+	for _, p := range presets {
+		if p.Kind == KindVideo {
+			if p.ID != "openai_video_seedance" {
+				t.Fatalf("设置页的格式列表第一项要是默认格式: %s", p.ID)
+			}
+			return
+		}
+	}
+	t.Fatal("没有视频格式")
+}
